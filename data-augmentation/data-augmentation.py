@@ -3,7 +3,7 @@ import numpy as np
 
 df = pd.read_csv("./data/merged.csv")
 
-num_samples = 1000
+num_samples = 50000000
 
 
 def generate_numerical_data(df, columns, num_sample):
@@ -28,9 +28,9 @@ new_data = new_data[df.columns]
 
 new_data = new_data.fillna("N/A")
 
-new_data.to_csv("data/1000.csv", index=False)
+new_data.to_csv("data/50000000.csv", index=False)
 
 
 result = pd.concat([df, new_data], axis=0, ignore_index=True)
 
-result.to_csv("data/merged_1000.csv", index=False)
+result.to_csv("data/merged_50000000.csv", index=False)
