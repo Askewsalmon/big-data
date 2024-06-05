@@ -90,8 +90,6 @@ lines = sc.textFile(input_file)
 header = lines.first()
 data = lines.filter(lambda x: x != header).map(parse_line)
 
-print(data.take(5))
-
 grouped_rdd = data.groupBy(lambda x: (x[0]))
 
 results = grouped_rdd.flatMapValues(process_records)
