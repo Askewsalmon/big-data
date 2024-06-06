@@ -103,6 +103,8 @@ formatted_data = grouped_data.mapValues(process_industry_data).flatMap(
     lambda x: format_output(x[0], x[1])
 )
 
+sorted_data = formatted_data.sortBy(lambda x: (x[2], -x[3]))
+
 formatted_data.saveAsTextFile(output_path)
 
 sc.stop()
