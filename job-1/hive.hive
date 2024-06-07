@@ -1,0 +1,56 @@
+CREATE EXTERNAL TABLE IF NOT EXISTS stock_data (
+    ticker STRING,
+    name STRING,
+    date_ticker STRING,
+    low FLOAT,
+    high FLOAT,
+    volume FLOAT,
+    close FLOAT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+TBLPROPERTIES ('skip.header.line.count'='1');
+
+LOAD DATA LOCAL INPATH 'D:\data\merged_100000000.csv'
+    OVERWRITE INTO TABLE stock_data;
+
+CREATE TABLE IF NOT EXISTS result (
+    ticker STRING,
+    year INT,
+    name STRING,
+    low FLOAT,
+    high FLOAT,
+    average_volume FLOAT,
+    first_close FLOAT,
+    last_close FLOAT,
+    percentage_change FLOAT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LOCATION '/output';
+
+INSERT OVERWRITE DIRECTORY '/output'
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+SELECT 
+    name, 
+    ticker, 
+    year, 
+    low, 
+    high, 
+    average_volume, 
+    percentage_change 
+FROM (
+    SELECT 
+        ticker,
+        CAST(SUBSTR(date_ticker, 1, 4) AS INT) AS year,
+        MIN(name) AS name,
+        MIN(low) AS low,
+        MAX(high) AS high,
+        AVG(volume) AS average_volume,
+        MIN(close) AS first_close,
+        MAX(close) AS last_close,
+        ((MAX(close) - MIN(close)) / MIN(close) * 100) AS percentage_change
+    FROM stock_data
+    GROUP BY ticker, CAST(SUBSTR(date_ticker, 1, 4) AS INT)
+) AS result_table;
