@@ -1,0 +1,84 @@
+CREATE EXTERNAL TABLE IF NOT EXISTS stock_data (
+    ticker STRING,
+    name STRING,
+    date_ticker STRING,
+    open FLOAT,
+    close FLOAT,
+    volume FLOAT,
+    sector STRING,
+    industry STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+TBLPROPERTIES ('skip.header.line.count'='1');
+
+LOAD DATA LOCAL INPATH 'D:/data/merged_100000000.csv'
+OVERWRITE INTO TABLE stock_data;
+
+INSERT OVERWRITE DIRECTORY '/output'
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+SELECT 
+    iys.sector,
+    iys.industry,
+    iys.year,
+    iys.percentage,
+    iys.max_percentage,
+    mpt.max_ticker_percentage,
+    iys.max_volume,
+    mvt.max_ticker_volume
+FROM (
+    SELECT 
+        sector,
+        industry,
+        CAST(SUBSTR(date_ticker, 1, 4) AS INT) AS year,
+        SUM(open) AS total_open,
+        SUM(close) AS total_close,
+        SUM(volume) AS total_volume,
+        (SUM(close) - SUM(open)) / SUM(open) * 100 AS percentage,
+        MAX((close - open) / open * 100) AS max_percentage,
+        MAX(volume) AS max_volume
+    FROM stock_data
+    GROUP BY sector, industry, CAST(SUBSTR(date_ticker, 1, 4) AS INT)
+) iys
+JOIN (
+    SELECT
+        sector,
+        industry,
+        CAST(SUBSTR(date_ticker, 1, 4) AS INT) AS year,
+        ticker AS max_ticker_percentage
+    FROM (
+        SELECT 
+            sector,
+            industry,
+            date_ticker,
+            CAST(SUBSTR(date_ticker, 1, 4) AS INT) AS year,
+            ticker,
+            (close - open) / open * 100 AS percentage,
+            ROW_NUMBER() OVER (PARTITION BY sector, industry, CAST(SUBSTR(date_ticker, 1, 4) AS INT) ORDER BY (close - open) / open * 100 DESC) AS rank
+        FROM stock_data
+    ) ranked_data
+    WHERE rank = 1
+) mpt
+    ON iys.sector = mpt.sector AND iys.industry = mpt.industry AND iys.year = mpt.year
+JOIN (
+    SELECT
+        sector,
+        industry,
+        CAST(SUBSTR(date_ticker, 1, 4) AS INT) AS year,
+        ticker AS max_ticker_volume
+    FROM (
+        SELECT 
+            sector,
+            industry,
+            date_ticker, 
+            CAST(SUBSTR(date_ticker, 1, 4) AS INT) AS year,
+            ticker,
+            volume,
+            ROW_NUMBER() OVER (PARTITION BY sector, industry, CAST(SUBSTR(date_ticker, 1, 4) AS INT) ORDER BY volume DESC) AS rank
+        FROM stock_data
+    ) ranked_data
+    WHERE rank = 1
+) mvt
+    ON iys.sector = mvt.sector AND iys.industry = mvt.industry AND iys.year = mvt.year
+ORDER BY iys.percentage DESC;
