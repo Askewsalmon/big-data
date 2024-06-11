@@ -3,7 +3,6 @@
 from pyspark import SparkConf, SparkContext
 import argparse
 from datetime import datetime
-from collections import defaultdict
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", type=str, help="Input file path")
@@ -28,74 +27,52 @@ def parse_line(line):
 
 
 def process_records(records):
-    year_data = []
+    year_data = {}
     for record in records:
-        ticker, value = record
-        name, date, low, high, volume, close = value
+        name, date, low, high, volume, close = record
         parse_date = datetime.strptime(date, "%Y-%m-%d")
         year = parse_date.year
 
-        if not year_data or year_data[-1][0] != year:
-            year_data.append(
-                (
-                    name,
-                    year,
-                    low,
-                    high,
-                    [volume],
-                    close,
-                    close,
-                    date,
-                )
-            )
+        if year not in year_data:
+            year_data[year] = {
+                "name": name,
+                "low": low,
+                "high": high,
+                "volumes": [volume],
+                "open": close,
+                "close": close,
+                "first_date": date,
+                "last_date": date,
+            }
         else:
-            last_year_data = year_data[-1]
-            if date > last_year_data[6]:
-                year_data[-1] = (
-                    name,
-                    year,
-                    min(low, last_year_data[1]),
-                    max(high, last_year_data[2]),
-                    last_year_data[3] + [volume],
-                    close,
-                    last_year_data[5],
-                    date,
-                )
-            if date < last_year_data[6]:
-                year_data[-1] = (
-                    name,
-                    year,
-                    min(low, last_year_data[1]),
-                    max(high, last_year_data[2]),
-                    last_year_data[3] + [volume],
-                    last_year_data[4],
-                    close,
-                    last_year_data[6],
-                )
+            year_data[year]["low"] = min(low, year_data[year]["low"])
+            year_data[year]["high"] = max(high, year_data[year]["high"])
+            year_data[year]["volumes"].append(volume)
+            if date < year_data[year]["first_date"]:
+                year_data[year]["open"] = close
+                year_data[year]["first_date"] = date
+            if date > year_data[year]["last_date"]:
+                year_data[year]["close"] = close
+                year_data[year]["last_date"] = date
 
-    for i in range(len(year_data)):
-        year_data[i] = (
-            year_data[i][0],
-            year_data[i][1],
-            year_data[i][2],
-            year_data[i][3],
-            round(sum(year_data[i][4]) / len(year_data[i][4]), 2),
-            round((year_data[i][5] - year_data[i][6]) / year_data[i][6] * 100, 2),
+    result = []
+    for year, data in year_data.items():
+        avg_volume = round(sum(data["volumes"]) / len(data["volumes"]), 2)
+        annual_return = round((data["close"] - data["open"]) / data["open"] * 100, 2)
+        result.append(
+            (data["name"], year, data["low"], data["high"], avg_volume, annual_return)
         )
 
-    return year_data
+    return result
 
 
 lines = sc.textFile(input_file)
 header = lines.first()
 data = lines.filter(lambda x: x != header).map(parse_line)
 
-grouped_rdd = data.groupBy(lambda x: (x[0]))
+grouped_rdd = data.groupByKey()
 
-results = grouped_rdd.flatMapValues(process_records)
-
-for result in results.take(5):
-    print(result)
+results = grouped_rdd.flatMap(lambda x: process_records(x[1]))
 
 results.saveAsTextFile(output_path)
 

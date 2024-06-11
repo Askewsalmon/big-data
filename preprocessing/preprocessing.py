@@ -7,9 +7,9 @@ historical_stocks_filtered = historical_stocks[
     historical_stocks["ticker"].isin(historical_stock_prices["ticker"])
 ]
 
-historical_stocks_filtered["name"] = historical_stocks_filtered["name"].str.replace(
-    r",\s*INC\.$", ".INC.", regex=True
-)
+
+historical_stocks["name"] = historical_stocks["name"].str.replace(",", " ")
+
 
 historical_stocks_filtered = historical_stocks_filtered.fillna("N/A")
 
